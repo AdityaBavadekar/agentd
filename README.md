@@ -1,8 +1,23 @@
 # agentd
 
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+
 Built for the ["Agent Development Kit Hackathon with Google Cloud"](https://googlecloudmultiagents.devpost.com/)
 
 > "`agentd` orchestrates the complex processes of idea development, much like `systemd` manages a Linux system's operations."
+
+
+<html>
+    <h2 align="center">
+      <img src="assets/logo.png" width="256"/>
+    </h2>
+    <h4 align="center">
+      An open-source, Multi-agent system that automates idea development using AI agents built using Google ADK. 
+    </h4>
+</html>
+
+
+
 
 ## Overview
 
@@ -157,6 +172,42 @@ def get_cloud_storage():
 
 
 
+## Acknowledgements / External Libraries Used
+
+`agentd` is built with the help of several excellent open-source libraries:
+
+* **[google-adk](https://github.com/google/adk-python/)** - Framework for building and orchestrating multi-agent systems using Google Cloud’s Agent Development Kit.
+* **[graphviz](https://graphviz.org/)** - Graph visualization software for rendering agent workflows and relationships.
+* **[markdown2](https://github.com/trentm/python-markdown2)** - Fast and complete Markdown parser for generating reports.
+* **[matplotlib](https://matplotlib.org/)** - Library for creating static, animated, and interactive visualizations.
+* **[networkx](https://networkx.org/)** - Library for creating, manipulating, and analyzing complex networks.
+* **[weasyprint](https://weasyprint.org/)** - Library for generating PDF documents from HTML and CSS.
+* **[wordcloud](https://github.com/amueller/word_cloud)** - Simple library for creating word cloud visualizations.
+
+
+## Formatting
+
+The codebase uses **Black** and **isort** for consistent Python formatting.
+Run following before committing changes:
+```
+black . && isort .
+```
+
+* **[Black](https://black.readthedocs.io/)** - for automatic Python code formatting
+* **[isort](https://pycqa.github.io/isort/)** - for import sorting
+
+
 ## License
 
-This project is licensed under the Apache License 2.0. See the [LICENSE](LICENSE) file for details.
+This project is licensed under the Apache License 2.0. See the [LICENSE](/LICENSE.md) file for details.
+
+
+```
+Copyright 2025 Aditya Bavadekar
+
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License. You may obtain a copy of the License at
+
+   http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the specific language governing permissions and limitations under the License.
+```
