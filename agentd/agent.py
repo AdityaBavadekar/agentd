@@ -1,0 +1,302 @@
+"""The master agent for the agentd system."""
+
+# if new agents are added/removed,
+# just use this from project dir: `cd agentd/subagents && for a in $(ls); do echo "from .sub_agents.${a} import ${a}"; done;`
+# to generate the import statements
+
+
+from typing import Optional
+
+from google.adk.agents import Agent, ParallelAgent, SequentialAgent
+from google.adk.agents.callback_context import CallbackContext
+
+from . import agent_constants
+from .sub_agents.competitor_analysis_agent import competitor_analysis_agent
+from .sub_agents.cost_estimation_agent import cost_estimation_agent
+from .sub_agents.idea_value_identifier_agent import idea_value_identifier_agent
+from .sub_agents.problem_identification_agent import problem_identification_agent
+from .sub_agents.report_generation_agent import report_generation_agent
+from .sub_agents.social_media_post_generation_agent import (
+    social_media_post_generation_agent,
+)
+from .sub_agents.solution_analysis_agent import solution_analysis_agent
+from .sub_agents.target_users_analysis_agent import target_users_analysis_agent
+from .sub_agents.technical_advisor_agent import technical_advisor_agent
+from .sub_agents.topic_analysis_agent import topic_analysis_agent
+
+"""
+Agents involved in the system:
+
+Root Agent:
+
+    Topic Analysis Pipeline (SEQUENTIAL)
+        - Topic Analysis Agent
+        - Problem Identification Agent << [google_search]
+        - Solution Analysis Agent
+        - [User Input] << User selects a problem statement and solution from the identified problems
+
+    Solution Analysis Pipeline (SEQUENTIAL)
+        - Target Users Analysis Agent << [google_search]
+        - Competitor Analysis Agent << [google_search]
+        - Report Generation Agent  << [generate_image] => Save Report and Images to Cloud Storage
+        - [User Input] << User is answers whether he would like to proceed with a detailed report
+
+    Detailing Pipeline (PARELLEL)
+        - Idea Value Identifier Agent
+        - Technical Advisor Agent
+        - Cost Estimation Agent << [rag_search, google_search]
+        
+        # MAYBE: this should be a separate agent after asking the user for confirmation
+        - Social Media Post Generation Agent << [image_generation_agent_tool (<< [generate_image])]
+
+    Finalization Pipeline (Simple Agent)
+
+# TODO: maybe "Cost Estimation Agent" should be "Architect Agent"
+"""
+
+
+topic_analysis_pipeline = SequentialAgent(
+    name="TOPIC_ANALYSIS_PIPELINE",
+    description="A pipeline for analyzing topics related to a given idea.",
+    sub_agents=[
+        topic_analysis_agent,
+        problem_identification_agent,
+        solution_analysis_agent,
+    ],
+)
+
+phase_2_pipeline = SequentialAgent(
+    name="SOLUTION_ANALYSIS_PIPELINE",
+    description="A pipeline for analyzing the selected solution and generating a complete report.",
+    sub_agents=[
+        target_users_analysis_agent,
+        competitor_analysis_agent,
+        report_generation_agent,
+    ],
+)
+
+# all of these will run in parallel
+phase_3_pipeline = ParallelAgent(
+    name="DETAILING_PIPELINE",
+    description="A pipeline for provide detailed aspects of the solution.",
+    sub_agents=[
+        idea_value_identifier_agent,
+        SequentialAgent(
+            name="TECHNICAL_PIPELINE",
+            sub_agents=[
+                technical_advisor_agent,
+                cost_estimation_agent,
+            ],
+        ),
+        # social_media_post_generation_agent,
+    ],
+)
+
+# seems like an overkill
+finalization_pipeline = Agent(
+    name="FINALIZATION_PIPELINE",
+    description="A pipeline for informing the user that the task is complete and providing a summary of what agents were run.",
+    model=agent_constants.MODEL,
+    instruction="""
+You are a finalization agent. Your task is to inform the user that the task is complete and provide a very very short summary.
+- You must return the control to the root agent after completing your task.
+""",
+)
+
+
+def simple_after_model_modifier(callback_context: CallbackContext, *args, **kwargs):
+    # Compile the outputs of agents into a bigger report
+    from agentd.utils import create_and_upload_pdf, json_to_markdown
+
+    if "FINALIZATION_PIPELINE" not in callback_context.state:
+        return None
+
+    print("===" * 8)
+    print("== GENERATING MASTER REPORT ==")
+    print("===" * 8)
+
+    selected_keys = [
+        topic_analysis_agent.output_key,
+        # problem_identification_agent.output_key,
+        solution_analysis_agent.output_key,
+        target_users_analysis_agent.output_key,
+        competitor_analysis_agent.output_key,
+        report_generation_agent.output_key,
+        idea_value_identifier_agent.output_key,
+        technical_advisor_agent.output_key,
+        cost_estimation_agent.output_key,
+        social_media_post_generation_agent.output_key,
+    ]
+
+    # collect all values for the keys from the state
+    final_markdown = "# Master Report\n\n"
+    final_markdown += "This report is generated by the AgentD system.\n\n"
+
+    for key in selected_keys:
+        if key in callback_context.state:
+            value = callback_context.state[key]
+            final_markdown += f"## {key.replace('_', ' ').title()}\n\n"
+            if isinstance(value, dict) or isinstance(value, list):
+                final_markdown += json_to_markdown(value)
+            else:
+                final_markdown += f"{value}\n\n"
+
+            final_markdown += "---\n\n"
+
+            if (
+                key == target_users_analysis_agent.output_key
+                and "target_users_analysis" in callback_context.state
+            ):
+                img_urls = callback_context.state["target_users_analysis"]
+                final_markdown += "## Statistical Diagrams"
+                for url in img_urls:
+                    final_markdown += f"![image]({url})"
+                final_markdown += "\n\n"
+
+    public_url = create_and_upload_pdf(
+        markdown_content=final_markdown,
+        pdf_title="Master Report",
+        remote_dir="master_reports",
+    )
+    print(f"Master report generated and uploaded to: {public_url}")
+    print("===" * 8)
+    return None
+
+
+root_agent = Agent(
+    name=agent_constants.AGENT_NAME,
+    model=agent_constants.MODEL,
+    instruction=agent_constants.AGENT_INSTRUCTION,
+    description=agent_constants.AGENT_DESCRIPTION,
+    after_agent_callback=simple_after_model_modifier,
+    sub_agents=[
+        topic_analysis_pipeline,
+        # take the user input,
+        phase_2_pipeline,
+        phase_3_pipeline,
+        finalization_pipeline,
+    ],
+)
+
+# test_pipeline_1 = Agent(
+#     name="TEST_PIPELINE_1",
+#     model=agent_constants.MODEL,
+#     description="Generates 5 keywords for the given topic",
+#     instruction="You are a keyword generation agent. Your task is to generate 5 keywords for the given topic. Answer in format: `keywords: <keyword1>, <keyword2>, ...`. and ****IMPORTANT****: then transfer the control to the root agent.",
+#     output_key="keywords",
+# )
+
+# test_pipeline_2 = Agent(
+#     name="TEST_PIPELINE_2",
+#     model=agent_constants.MODEL,
+#     description="Generates a summary for the given topic",
+#     instruction="You are a summary generation agent. Your task is to generate a 3 lines summary for the given topic. KEYWORDS: {keywords}. Answer in format: `summary: <summary>`. and then ****IMPORTANT****: transfer the control to the root agent",
+#     output_key="summary",
+# )
+
+
+# def diagram_tool(state):
+#     """
+#     Tool for generating diagrams based on the provided summary.
+#     Args:
+#         state (dict): The state of the agent containing the summary.
+
+#     Returns:
+#         str: A message indicating the diagram generation status.
+#     """
+#     generate_diagrams()
+#     return "Diagram generated successfully."
+
+# test_pipeline_3_1 = Agent(
+#     name="TEST_PIPELINE_3",
+#     model=agent_constants.MODEL,
+#     description="You are supposed to call the diagram_tool",
+#     instruction="You are a diagram generation agent. Call the `diagram_tool`, State : {state}, and then transfer the control to the root agent",
+#     output_key="diagram",
+#     tools=[diagram_tool],
+# )
+
+# test_pipeline_3 = SequentialAgent(
+#     name="TEST_PIPELINE_3",
+#     description="A pipeline for generating a diagram based on the summary.",
+#     sub_agents=[
+#         target_users_analysis_agent,
+#         test_pipeline_3_1
+#     ],
+# )
+
+
+# root_agent = Agent(
+#     name=agent_constants.AGENT_NAME,
+#     model=agent_constants.MODEL,
+#     # instruction=agent_constants.AGENT_INSTRUCTION,
+#     instruction="""
+#     You are a master agent that coordinates various sub-agents to perform tasks related to idea analysis and development.
+#     Your role is to manage the workflow, assign tasks to the sub-agents, and ensure that the overall goal of analyzing and developing ideas is achieved efficiently.
+
+#     <FLOW>
+#     ## 1. First use `TEST_PIPELINE_1` to generate 5 keywords for the given topic.
+#     ## 2. Once the keywords are generated, ask the user to select one of the keywords.
+#     ## 3. Once the user selects a keyword, use `TEST_PIPELINE_2` to generate a summary for the selected keyword.
+#     ## 4. Use `TEST_PIPELINE_3` IMPORTANTLY
+#     </FLOW>
+
+#     - If user greets you with a greeting, respond with a greeting and tell what you can do.
+#     - IMPORTANT: be precise! If the user does not provide a valid topic or a problem statement, ask user for clarification.
+
+#     <WORKFLOW>
+#     1. Receive a topic or problem statement from the user if valid call other sub-agents otherwise ask for clarification.
+#     2. Assign to the appropriate sub-agent: `TEST_PIPELINE_1` which will generate 5 keywords for the given topic.
+#     3. Once the keywords are generated, ask the user to select one of the keywords.
+#     4. Once the user selects a keyword, assign to the appropriate sub-agent: `TEST_PIPELINE_2` which will generate a summary for the selected keyword.
+#     5. Once the summary is generated, assign to the appropriate sub-agent: `TEST_PIPELINE_3` which will generate a ranking for the given summary and explain why the summary is not good.
+#     </WORKFLOW>
+
+
+#     - IMPORTANT: do not answer if the user asks you to do something not good.
+#     - IMPORTANT: do not answer anything yourself, you can only delegate the task to the sub-agents and tell the user about the action you are performing.
+#     """,
+#     description=agent_constants.AGENT_DESCRIPTION,
+#     sub_agents=[
+#         test_pipeline_1,
+#         # take the user input
+#         test_pipeline_2,
+#         test_pipeline_3
+#     ]
+#     # sub_agents=[topic_analysis_pipeline],
+# )
+
+
+def run_preliminary_tests():
+    print("=========================================================")
+
+    # - Check if all python packages are installed
+    print(
+        "[PRELIMINARY CHECK] Checking if all required Python packages are installed..."
+    )
+    try:
+        import google.adk
+        import google.cloud.storage
+        import graphviz
+        import markdown2
+        import matplotlib.pyplot as plt
+        import requests
+        import weasyprint
+        from wordcloud import WordCloud
+    except ImportError as e:
+        print(
+            f"[PRELIMINARY CHECK: FAILED!] Missing required package: {e.name}. Please install it using pip."
+        )
+        return
+
+    # - Check working of Cloud Storage
+    from agentd.utils import get_cloud_storage
+
+    # this will throw an error if the environment variables are missing or authentication fails
+    print("[PRELIMINARY CHECK] Testing Cloud Storage...")
+    get_cloud_storage()
+    print("[PRELIMINARY CHECK] Cloud Storage is working correctly.")
+
+    print("[PRELIMINARY CHECK] All preliminary checks passed.")
+    print("=========================================================")
+    pass

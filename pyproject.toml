@@ -1,0 +1,15 @@
+[project]
+name = "google-adk-hackathon"
+version = "0.1.0"
+description = "adentd will help you find solutions and a market analysis report for your idea"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "google-adk>=1.4.1",
+    "graphviz>=0.21",
+    "markdown2>=2.5.3",
+    "matplotlib>=3.9.4",
+    "networkx>=3.2.1",
+    "weasyprint>=65.1",
+    "wordcloud>=1.9.4",
+]
