@@ -9,9 +9,10 @@ from google import genai
 from google.genai import types
 from PIL import Image
 
-from agentd.utils import get_generated_directory
+from agentd.utils import get_cloud_storage, get_generated_directory
 
 SAVE_DIR = get_generated_directory()
+SAVE_DIR = os.path.join(SAVE_DIR, "generated_images")
 IMAGEN_DISABLED = True
 CLOUD_STORAGE_DISABLED = False
 CLOUD_STORAGE_IMAGES_DIR = "generated_images"
@@ -90,12 +91,14 @@ def generate_image_tool(description: str):
     Returns:
         str: The file path where the generated image is saved.
     """
-    from agentd.utils import get_cloud_storage
+
+    # return "https://picsum.photos/200/300"
 
     try:
-        print("Generating image...")
+        print("=== GENERATING IMAGE ===")
         image_path = SELECTED_IMAGE_GENERATION_METHOD(description)
         print(f"Image generated and saved at: {image_path}")
+        print("=== IMAGE GENERATED ===")
 
         # using the image_path uploaded the image to the cloud storage
         print("Uploading image to cloud storage...")
@@ -107,9 +110,7 @@ def generate_image_tool(description: str):
             remote_path=remote_file_path,
         )
         print("Image uploaded to cloud storage.")
-        print("Generating public URL for the image...")
         image_url = get_cloud_storage().get_file_url(remote_file_path)
-        print(f"Public URL for the image: {image_url}")
 
         # add a directory prefix to the image path so that when the image url is used,
         # the DIR prefix is can be replced with the actual project directory path.
@@ -117,26 +118,3 @@ def generate_image_tool(description: str):
     except Exception as e:
         print(f"Error generating image: {e}")
         return "[Image generation failed]"
-
-
-if __name__ == "__main__":
-    img_description = (
-        "A futuristic city skyline at sunset, with flying cars and neon lights."
-    )
-    print("=======" * 8)
-    print("Generating image with Gemini...")
-    gemini_image = image_generation_gemini(img_description)
-    print(f"Gemini image saved as: {gemini_image}")
-    print()
-
-    imagen_image = None
-
-    if not IMAGEN_DISABLED:
-        print("=======" * 8)
-        print("Generating image with Imagen...")
-        imagen_image = image_generation_imagen(img_description)
-        print(f"Imagen image saved as: {imagen_image}")
-
-    Image.open(gemini_image).show()
-    if imagen_image:
-        Image.open(imagen_image).show()

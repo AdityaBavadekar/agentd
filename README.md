@@ -17,8 +17,6 @@ Built for the ["Agent Development Kit Hackathon with Google Cloud"](https://goog
 </html>
 
 
-
-
 ## Overview
 
 ### The Problem
@@ -48,7 +46,7 @@ Built on **Google Cloud's Agent Development Kit (ADK)**, `agentd` acts as an int
 
 ---
 
-## Architecture
+## Agents Architecture
 
 `agentd` is composed of orchestrated pipelines of agents, each responsible for a specific phase in the idea development process.
 
@@ -60,7 +58,7 @@ Root Agent
  │     ├── Solution Analysis Agent
  │     └── User selects a problem & solution
  │
- ├── Solution Analysis Pipeline (Sequential)
+ ├── Solution Analysis Pipeline (Sequential)├──
  │     ├── Target Users Analysis Agent (uses Google Search)
  │     ├── Competitor Analysis Agent (uses Google Search)
  │     ├── Report Generation Agent (generates images, saves to Cloud Storage)
@@ -68,21 +66,22 @@ Root Agent
  │
  ├── Detailing Pipeline (Parallel)
  │     ├── Idea Value Identifier Agent
- │     ├── Technical Pipeline (Sequential)
- │     │     ├── Technical Advisor Agent
- │     │     └── Cost Estimation Agent (uses RAG + Google Search)
- │     └── (Optional) Social Media Post Generation Agent (image + text)
+ │     └── Technical Pipeline (Sequential)
+ │           ├── Technical Advisor Agent
+ │           └── Architecht Agent (uses Google Search)
+ │
+ ├── Social Media Post Generation Agent (image + text)
  │
  └── Finalization Pipeline
 ```
 
 Each pipeline is modular and can be adapted or extended.
 
-
+### Diagram
 <!-- TODO -->
 <!-- - Detailed and a better explaination to be added. -->
 
-![flow](/assets/flow.png)
+![flow](/assets/AGENTD_ARCH_DIAGRAM.excalidraw(1).png)
 
 
 ## Requirements
@@ -202,12 +201,19 @@ black . && isort .
 This project is licensed under the Apache License 2.0. See the [LICENSE](/LICENSE.md) file for details.
 
 
+
 ```
 Copyright 2025 Aditya Bavadekar
 
-Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License. You may obtain a copy of the License at
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
 
-   http://www.apache.org/licenses/LICENSE-2.0
+    http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the specific language governing permissions and limitations under the License.
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
 ```

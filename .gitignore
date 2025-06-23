@@ -186,3 +186,5 @@ key.json
 
 generated
 generated_and_saved
+*.output
+temp.py

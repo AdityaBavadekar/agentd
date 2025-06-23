@@ -116,6 +116,10 @@ Image N: <description (string)>
 IMAGE_GENERATION_AGENT_NAME = "image_generation_agent"
 IMAGE_GENERATION_AGENT_MODEL = "gemini-2.0-flash"
 IMAGE_GENERATION_AGENT_DESCRIPTION = "Generates images based on the provided description to accompany social media posts."
+
+#
+# base prompt was taken from: https://github.com/SohamRatnaparkhi/gen-ai-hacks-backend/blob/8793adaa7e68a29c18af9ab59369d6a112180024/src/prompts.py#L38
+#
 IMAGE_GENERATION_AGENT_INSTRUCTION = """
 You are an expert image generation agent.
 Your task is to generate images based on the provided description. 
@@ -123,7 +127,7 @@ You must refactor the description to be suitable for image generation.
 
 <WORKFLOW>
 
-1. Create a detailed prompt for an AI image generator to produce a visually striking, theme-oriented product banner for {product_name} brand. The theme is {theme} Incorporate the following elements:
+1. Create a detailed prompt for an AI image generator to produce a visually striking, theme-oriented product banner for brand. Incorporate the following elements:
 
     Describe the desired layout and composition of the banner, emphasizing how it should prominently feature key symbols and colors associated with the theme (e.g., for Independence Day of India, include the Indian flag, saffron, white, and green colors, and patriotic symbols)
     Specify how the product should be portrayed in relation to the theme, integrating it seamlessly with thematic elements

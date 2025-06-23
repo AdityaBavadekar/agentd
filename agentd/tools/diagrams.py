@@ -1,63 +1,16 @@
-import json
 import os
 import uuid
 
 import graphviz
 import matplotlib.pyplot as plt
-import networkx as nx
 from wordcloud import WordCloud
 
 from agentd.utils import get_cloud_storage, get_generated_directory
 
 
 def gen_random_id():
+    """Generates a random ID using last 6 chars of uuid1() for file naming."""
     return str(uuid.uuid1())[:6]
-
-
-dummy_visualization_data = {
-    "pie_chart_segments": [
-        {"Health-Conscious Millennials": 40},
-        {"Busy Professionals": 30},
-        {"Fitness Enthusiasts": 20},
-        {"Niche Segment": 10},
-    ],
-    "pain_points_bar_chart_data": [
-        {"Lack of Time": 75},
-        {"Lack of Motivation": 60},
-        {"Conflicting Advice": 40},
-        {"Cost": 25},
-    ],
-    "word_cloud_text": "health fitness app workout personalized nutrition goals tracking motivation busy parents professionals millennials technology convenience",
-    "knowledge_graph_elements": {
-        "nodes": [
-            {"id": "persona_anna", "label": "Busy Anna", "type": "persona"},
-            {"id": "problem_time", "label": "Lack of Time", "type": "problem"},
-            {"id": "solution_quick", "label": "Quick Workouts", "type": "solution"},
-            {
-                "id": "segment_health",
-                "label": "Health-Conscious Millennials",
-                "type": "segment",
-            },
-        ],
-        "edges": [
-            {
-                "source": "persona_anna",
-                "target": "problem_time",
-                "label": "experiences",
-            },
-            {
-                "source": "solution_quick",
-                "target": "problem_time",
-                "label": "addresses",
-            },
-            {
-                "source": "persona_anna",
-                "target": "segment_health",
-                "label": "belongs_to",
-            },
-        ],
-    },
-}
 
 
 def save_diagram_to_file(figure, filename):
@@ -108,7 +61,11 @@ def save_diagram_to_file(figure, filename):
     return public_url
 
 
-def generate_diagrams(visualization_data=dummy_visualization_data):
+def generate_diagrams(visualization_data=None):
+    if not visualization_data:
+        print("No visualization data provided. Skipping diagram generation.")
+        raise ValueError("Visualization data is required to generate diagrams.")
+
     output_dir = os.path.join(get_generated_directory(), "diagrams")
     os.makedirs(output_dir, exist_ok=True)
     print("Generating diagrams for visualization data...")
@@ -128,8 +85,7 @@ def generate_diagrams(visualization_data=dummy_visualization_data):
         plt.axis("equal")
         plt.tight_layout()
         pie_chart_file_name = f"user_segments_pie_chart_{gen_random_id()}.png"
-        public_url = save_diagram_to_file(plt, pie_chart_file_name)
-        public_urls["pie_chart"] = public_url
+        public_urls["pie_chart"] = save_diagram_to_file(plt, pie_chart_file_name)
         plt.close()  # Close the plot to free memory
 
     # === Bar Graph: Top Pain Points ===
@@ -147,10 +103,9 @@ def generate_diagrams(visualization_data=dummy_visualization_data):
         plt.gca().invert_yaxis()  # Put highest value at the top
         plt.tight_layout()
 
-        bar_chart_file_name = f"user_pain_points_bar_chart_{gen_random_id()}.png"
-        public_url = save_diagram_to_file(plt, bar_chart_file_name)
-        public_urls["bar_chart"] = public_url
-
+        public_urls["bar_chart"] = save_diagram_to_file(
+            plt, f"user_pain_points_bar_chart_{gen_random_id()}.png"
+        )
         plt.close()
 
     # === Word Cloud Generation ===
@@ -162,12 +117,10 @@ def generate_diagrams(visualization_data=dummy_visualization_data):
             background_color="white",
             max_words=100,
             collocations=False,
-        ).generate(
-            word_cloud_text
-        )  # collocations=False for more distinct words
-        word_cloud_file_name = f"target_audience_word_cloud_{gen_random_id()}.png"
-        public_url = save_diagram_to_file(wordcloud, word_cloud_file_name)
-        public_urls["word_cloud"] = public_url
+        ).generate(word_cloud_text)
+        public_urls["word_cloud"] = save_diagram_to_file(
+            wordcloud, f"target_audience_word_cloud_{gen_random_id()}.png"
+        )
 
     # === Knowledge Graph Visualization ===
     kg_data = visualization_data.get("knowledge_graph_elements")
@@ -212,13 +165,13 @@ def generate_diagrams(visualization_data=dummy_visualization_data):
             else:
                 dot.node(node["id"], node["label"])  # Default
 
-        # Add edges
+        # edges
         for edge in kg_data["edges"]:
             dot.edge(edge["source"], edge["target"], label=edge.get("label", ""))
 
         # Graphviz adds extension
-        kg_file_name = f"knowledge_graph_{gen_random_id()}"
-        public_url = save_diagram_to_file(dot, kg_file_name)
-        public_urls["knowledge_graph"] = public_url
+        public_urls["knowledge_graph"] = save_diagram_to_file(
+            dot, f"knowledge_graph_{gen_random_id()}"
+        )
 
     return public_urls

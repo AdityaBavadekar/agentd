@@ -5,14 +5,14 @@
 # to generate the import statements
 
 
-from typing import Optional
-
 from google.adk.agents import Agent, ParallelAgent, SequentialAgent
 from google.adk.agents.callback_context import CallbackContext
 
+from agentd.utils import create_and_upload_pdf, extract_json_from_text, json_to_markdown
+
 from . import agent_constants
+from .sub_agents.architecture_agent import architecture_agent
 from .sub_agents.competitor_analysis_agent import competitor_analysis_agent
-from .sub_agents.cost_estimation_agent import cost_estimation_agent
 from .sub_agents.idea_value_identifier_agent import idea_value_identifier_agent
 from .sub_agents.problem_identification_agent import problem_identification_agent
 from .sub_agents.report_generation_agent import report_generation_agent
@@ -38,21 +38,22 @@ Root Agent:
     Solution Analysis Pipeline (SEQUENTIAL)
         - Target Users Analysis Agent << [google_search]
         - Competitor Analysis Agent << [google_search]
-        - Report Generation Agent  << [generate_image] => Save Report and Images to Cloud Storage
+        - Report Generation Agent  << [image_generation_agent_tool] => Save Report and Images to Cloud Storage
         - [User Input] << User is answers whether he would like to proceed with a detailed report
 
     Detailing Pipeline (PARELLEL)
         - Idea Value Identifier Agent
         - Technical Advisor Agent
-        - Cost Estimation Agent << [rag_search, google_search]
+        - Architecture Agent << [google_search]
         
-        # MAYBE: this should be a separate agent after asking the user for confirmation
-        - Social Media Post Generation Agent << [image_generation_agent_tool (<< [generate_image])]
-
+    Social Media Post Generation Agent (If user requests) << [image_generation_agent_tool (<< [generate_image])]
+    
     Finalization Pipeline (Simple Agent)
-
-# TODO: maybe "Cost Estimation Agent" should be "Architect Agent"
 """
+import copy
+
+social_media_post_generation_agent_2 = copy.deepcopy(social_media_post_generation_agent)
+social_media_post_generation_agent_2.name = "social_media_post_generation_agent_2"
 
 
 topic_analysis_pipeline = SequentialAgent(
@@ -61,7 +62,7 @@ topic_analysis_pipeline = SequentialAgent(
     sub_agents=[
         topic_analysis_agent,
         problem_identification_agent,
-        solution_analysis_agent,
+        solution_analysis_agent,  # sets state user input required to True
     ],
 )
 
@@ -85,30 +86,17 @@ phase_3_pipeline = ParallelAgent(
             name="TECHNICAL_PIPELINE",
             sub_agents=[
                 technical_advisor_agent,
-                cost_estimation_agent,
+                architecture_agent,
             ],
         ),
-        # social_media_post_generation_agent,
     ],
 )
 
-# seems like an overkill
-finalization_pipeline = Agent(
-    name="FINALIZATION_PIPELINE",
-    description="A pipeline for informing the user that the task is complete and providing a summary of what agents were run.",
-    model=agent_constants.MODEL,
-    instruction="""
-You are a finalization agent. Your task is to inform the user that the task is complete and provide a very very short summary.
-- You must return the control to the root agent after completing your task.
-""",
-)
 
-
-def simple_after_model_modifier(callback_context: CallbackContext, *args, **kwargs):
-    # Compile the outputs of agents into a bigger report
-    from agentd.utils import create_and_upload_pdf, json_to_markdown
-
-    if "FINALIZATION_PIPELINE" not in callback_context.state:
+def simple_after_model_modifier(callback_context: CallbackContext, *_args, **_kwargs):
+    # combine the outputs of agents into a full report
+    # check if the architecture agent has run since it is the last agent in the pipeline
+    if architecture_agent.output_key not in callback_context.state:
         return None
 
     print("===" * 8)
@@ -116,7 +104,7 @@ def simple_after_model_modifier(callback_context: CallbackContext, *args, **kwar
     print("===" * 8)
 
     selected_keys = [
-        topic_analysis_agent.output_key,
+        # topic_analysis_agent.output_key,
         # problem_identification_agent.output_key,
         solution_analysis_agent.output_key,
         target_users_analysis_agent.output_key,
@@ -124,7 +112,7 @@ def simple_after_model_modifier(callback_context: CallbackContext, *args, **kwar
         report_generation_agent.output_key,
         idea_value_identifier_agent.output_key,
         technical_advisor_agent.output_key,
-        cost_estimation_agent.output_key,
+        architecture_agent.output_key,
         social_media_post_generation_agent.output_key,
     ]
 
@@ -135,29 +123,33 @@ def simple_after_model_modifier(callback_context: CallbackContext, *args, **kwar
     for key in selected_keys:
         if key in callback_context.state:
             value = callback_context.state[key]
-            final_markdown += f"## {key.replace('_', ' ').title()}\n\n"
+
+            # value could be a json string dump
+            try:
+                final_markdown += f"## {key.replace('_', ' ').title()}\n\n"
+                json_data = extract_json_from_text(value)
+                if json_data:
+                    value = json_data
+            except Exception as e:
+                print(f"Error extracting JSON from {key}: {e}")
+                continue
+
+            final_markdown += "\n\n"
             if isinstance(value, dict) or isinstance(value, list):
                 final_markdown += json_to_markdown(value)
             else:
+                final_markdown += "\n\n"
                 final_markdown += f"{value}\n\n"
 
             final_markdown += "---\n\n"
 
-            if (
-                key == target_users_analysis_agent.output_key
-                and "target_users_analysis" in callback_context.state
-            ):
-                img_urls = callback_context.state["target_users_analysis"]
-                final_markdown += "## Statistical Diagrams"
-                for url in img_urls:
-                    final_markdown += f"![image]({url})"
-                final_markdown += "\n\n"
-
     public_url = create_and_upload_pdf(
         markdown_content=final_markdown,
         pdf_title="Master Report",
+        local_dir="master_reports",
         remote_dir="master_reports",
     )
+    callback_context.state["master_report_url"] = public_url
     print(f"Master report generated and uploaded to: {public_url}")
     print("===" * 8)
     return None
@@ -174,97 +166,9 @@ root_agent = Agent(
         # take the user input,
         phase_2_pipeline,
         phase_3_pipeline,
-        finalization_pipeline,
+        social_media_post_generation_agent,  # this will run only if the user specifically asks for it
     ],
 )
-
-# test_pipeline_1 = Agent(
-#     name="TEST_PIPELINE_1",
-#     model=agent_constants.MODEL,
-#     description="Generates 5 keywords for the given topic",
-#     instruction="You are a keyword generation agent. Your task is to generate 5 keywords for the given topic. Answer in format: `keywords: <keyword1>, <keyword2>, ...`. and ****IMPORTANT****: then transfer the control to the root agent.",
-#     output_key="keywords",
-# )
-
-# test_pipeline_2 = Agent(
-#     name="TEST_PIPELINE_2",
-#     model=agent_constants.MODEL,
-#     description="Generates a summary for the given topic",
-#     instruction="You are a summary generation agent. Your task is to generate a 3 lines summary for the given topic. KEYWORDS: {keywords}. Answer in format: `summary: <summary>`. and then ****IMPORTANT****: transfer the control to the root agent",
-#     output_key="summary",
-# )
-
-
-# def diagram_tool(state):
-#     """
-#     Tool for generating diagrams based on the provided summary.
-#     Args:
-#         state (dict): The state of the agent containing the summary.
-
-#     Returns:
-#         str: A message indicating the diagram generation status.
-#     """
-#     generate_diagrams()
-#     return "Diagram generated successfully."
-
-# test_pipeline_3_1 = Agent(
-#     name="TEST_PIPELINE_3",
-#     model=agent_constants.MODEL,
-#     description="You are supposed to call the diagram_tool",
-#     instruction="You are a diagram generation agent. Call the `diagram_tool`, State : {state}, and then transfer the control to the root agent",
-#     output_key="diagram",
-#     tools=[diagram_tool],
-# )
-
-# test_pipeline_3 = SequentialAgent(
-#     name="TEST_PIPELINE_3",
-#     description="A pipeline for generating a diagram based on the summary.",
-#     sub_agents=[
-#         target_users_analysis_agent,
-#         test_pipeline_3_1
-#     ],
-# )
-
-
-# root_agent = Agent(
-#     name=agent_constants.AGENT_NAME,
-#     model=agent_constants.MODEL,
-#     # instruction=agent_constants.AGENT_INSTRUCTION,
-#     instruction="""
-#     You are a master agent that coordinates various sub-agents to perform tasks related to idea analysis and development.
-#     Your role is to manage the workflow, assign tasks to the sub-agents, and ensure that the overall goal of analyzing and developing ideas is achieved efficiently.
-
-#     <FLOW>
-#     ## 1. First use `TEST_PIPELINE_1` to generate 5 keywords for the given topic.
-#     ## 2. Once the keywords are generated, ask the user to select one of the keywords.
-#     ## 3. Once the user selects a keyword, use `TEST_PIPELINE_2` to generate a summary for the selected keyword.
-#     ## 4. Use `TEST_PIPELINE_3` IMPORTANTLY
-#     </FLOW>
-
-#     - If user greets you with a greeting, respond with a greeting and tell what you can do.
-#     - IMPORTANT: be precise! If the user does not provide a valid topic or a problem statement, ask user for clarification.
-
-#     <WORKFLOW>
-#     1. Receive a topic or problem statement from the user if valid call other sub-agents otherwise ask for clarification.
-#     2. Assign to the appropriate sub-agent: `TEST_PIPELINE_1` which will generate 5 keywords for the given topic.
-#     3. Once the keywords are generated, ask the user to select one of the keywords.
-#     4. Once the user selects a keyword, assign to the appropriate sub-agent: `TEST_PIPELINE_2` which will generate a summary for the selected keyword.
-#     5. Once the summary is generated, assign to the appropriate sub-agent: `TEST_PIPELINE_3` which will generate a ranking for the given summary and explain why the summary is not good.
-#     </WORKFLOW>
-
-
-#     - IMPORTANT: do not answer if the user asks you to do something not good.
-#     - IMPORTANT: do not answer anything yourself, you can only delegate the task to the sub-agents and tell the user about the action you are performing.
-#     """,
-#     description=agent_constants.AGENT_DESCRIPTION,
-#     sub_agents=[
-#         test_pipeline_1,
-#         # take the user input
-#         test_pipeline_2,
-#         test_pipeline_3
-#     ]
-#     # sub_agents=[topic_analysis_pipeline],
-# )
 
 
 def run_preliminary_tests():
@@ -275,6 +179,7 @@ def run_preliminary_tests():
         "[PRELIMINARY CHECK] Checking if all required Python packages are installed..."
     )
     try:
+        # pylint: disable=unused-import
         import google.adk
         import google.cloud.storage
         import graphviz
@@ -299,4 +204,254 @@ def run_preliminary_tests():
 
     print("[PRELIMINARY CHECK] All preliminary checks passed.")
     print("=========================================================")
-    pass
+
+
+"""The class for the agentd api."""
+
+from datetime import datetime
+
+from google.adk.events import Event
+from google.adk.runners import Runner
+from google.adk.sessions import InMemorySessionService, Session
+from google.genai import types
+
+from .agent import root_agent
+
+
+class AgentD:
+
+    class EventType:
+        """Enum for event types in AgentD."""
+
+        TOOL_CALL_REQUEST = "tool_call_request"
+        TOOL_RESULT = "tool_result"
+        TEXT_MESSAGE = "text_message"
+        CONTROL_SIGNAL = "control_signal"
+        USER_INPUT_REQUEST = "user_input_request"
+        PROGRESS_UPDATE = "progress_update"
+        FILE_URL = "file_url"
+
+    def parse_tool_call_event(self, event: Event):
+        """Parse a tool call event and return its details."""
+        tool_calls = []
+        for call in event.get_function_calls():
+            tool_calls.append(
+                {
+                    "name": call.name,
+                    "args": call.args,
+                }
+            )
+
+        return tool_calls
+
+    def parse_tool_result_event(self, event: Event):
+        """Parse a tool result event and return its details."""
+        tool_results = []
+        for resp in event.get_function_responses():
+            tool_results.append(
+                {
+                    "name": resp.name,
+                    "response": resp.response,
+                }
+            )
+
+        return tool_results
+
+    def __init__(self):
+        self.log("INITIALIZING AGENTD")
+        self._setup()
+        self.log("AGENTD INITIALIZED")
+
+    def _setup(self):
+        session_service = InMemorySessionService()
+        runner = Runner(
+            agent=root_agent,
+            session_service=session_service,
+            app_name="agentd",
+        )
+        self.runner = runner
+        self.session_service = session_service
+
+    def log(self, message: str):
+        print(f"========= [AGENTD] {message} =========")
+
+    @staticmethod
+    def generate_user_id() -> str:
+        """Generate a unique user ID based on the current timestamp."""
+        import uuid
+
+        return "u_" + str(uuid.uuid4())
+
+    async def new_sesion(self, user_id: str = None):
+        self.log(f"CREATING NEW SESSION FOR 'user:{user_id}'")
+        session = await self.session_service.create_session(
+            session_id=str(datetime.now().timestamp()),
+            app_name="agentd",
+            user_id=user_id,
+        )
+        self.log(f"SESSION CREATED: {session.id} for user: {user_id}")
+        return session
+
+    @staticmethod
+    def get_progress_from_agent(agent_name: str) -> int:
+        """
+        Returns the progress percentage based on the agent_name.
+        """
+        agent_progress_map = {
+            "topic_analysis_agent": 5,
+            "problem_identification_agent": 15,
+            "solution_analysis_agent": 30,
+            "target_users_analysis_agent": 40,
+            "competitor_analysis_agent": 50,
+            "report_generation_agent": 70,
+            "idea_value_identifier_agent": 80,
+            "technical_advisor_agent": 90,
+            "architecture_agent": 100,
+        }
+
+        return agent_progress_map.get(agent_name, 100)
+
+    async def continue_session(
+        self,
+        message: str,
+        session: Session = None,
+        session_id: str = None,
+        callback=None,
+    ):
+        if not session:
+            if not session_id:
+                raise ValueError("Either session or session_id must be provided.")
+            session = await self.session_service.get_session(session_id)
+            if not session:
+                raise ValueError(f"Session with ID {session_id} does not exist.")
+
+        self.log(f"CONTINUING SESSION '{session.id}'")
+
+        await self.run(
+            session,
+            new_message=types.Content(role="user", parts=[types.Part(text=message)]),
+            callback=callback,
+        )
+
+    async def run(
+        self, session: Session, new_message: types.Content = None, callback=None
+    ):
+        self.log(f"RUNNING AGENTD FOR SESSION '{session.id}'")
+
+        try:
+            async for event in self.runner.run_async(
+                user_id=session.user_id, session_id=session.id, new_message=new_message
+            ):
+                event: Event
+
+                if event.content and event.content.parts:
+                    if event.get_function_calls():
+                        if callback:
+                            callback(event, AgentD.EventType.TOOL_CALL_REQUEST)
+                        print("  • Type: Tool Call Request")
+                        for call in event.get_function_calls():
+                            print(f"    ↳ Function: {call.name}")
+                            print(f"    ↳ Args: {call.args}")
+                    elif event.get_function_responses():
+                        if callback:
+                            callback(event, AgentD.EventType.TOOL_RESULT)
+                        print("  • Type: Tool Result")
+                        for resp in event.get_function_responses():
+                            print(f"    ↳ Function: {resp.name}")
+                            print(f"    ↳ Result: {resp.response}")
+                    elif event.content.parts[0].text:
+                        text = event.content.parts[0].text.strip()
+                        if callback:
+                            if text.startswith("<ASK>"):
+                                # this is a user input request
+                                prompt = text.replace("<ASK>", "").strip()
+                                print("  • Type: User Input Request")
+                                print(f"    ↳ Prompt: {prompt}")
+                                callback(
+                                    {"agent_name": event.author, "description": prompt},
+                                    AgentD.EventType.USER_INPUT_REQUEST,
+                                )
+                            else:
+                                texts = [t.text.strip() for t in event.content.parts]
+                                callback(texts, AgentD.EventType.TEXT_MESSAGE)
+                                # calc progress based on agent name
+                                agent_name = event.author
+                                progress = AgentD.get_progress_from_agent(agent_name)
+                                callback(
+                                    progress,
+                                    AgentD.EventType.PROGRESS_UPDATE,
+                                )
+
+                        if event.partial:
+                            print("  • Type: Streaming Text Chunk")
+                        else:
+                            print("  • Type: Complete Text Message")
+                        print(f"    ↳ Text: {text}")
+                    else:
+                        print("  • Type: Other Content (e.g., code result)")
+                elif event.actions and (
+                    event.actions.state_delta or event.actions.artifact_delta
+                ):
+                    print("  • Type: State/Artifact Update")
+                    if event.actions.state_delta:
+                        print(f"    ↳ State Delta: {event.actions.state_delta}")
+                        print("    ↳ Updated State:")
+                        for key, value in event.actions.state_delta.items():
+                            print(f"      - {key}: {value}")
+
+                        if "user_input_specs" in event.actions.state_delta:
+                            user_input_specs = event.actions.state_delta[
+                                "user_input_specs"
+                            ]
+                            if user_input_specs and user_input_specs.get(
+                                "required", False
+                            ):
+                                if callback:
+                                    callback(
+                                        user_input_specs,
+                                        AgentD.EventType.USER_INPUT_REQUEST,
+                                    )
+
+                    if event.actions.artifact_delta:
+                        print(f"    ↳ Artifact Delta: {event.actions.artifact_delta}")
+                else:
+                    print("  • Type: Control Signal or Other")
+                    if callback:
+                        callback(event, AgentD.EventType.CONTROL_SIGNAL)
+
+        except Exception as e:
+            print(f"An error occurred while running AgentD: {e}")
+            if callback:
+                callback(e, AgentD.EventType.CONTROL_SIGNAL)
+
+        if "master_report_url" in session.state:
+            master_report_url = session.state["master_report_url"]
+            if callback:
+                callback(
+                    {
+                        "url": master_report_url,
+                        "description": "Master report generated by AgentD.",
+                        "name": "Master Report",
+                        "filetype": "pdf",
+                    },
+                    AgentD.EventType.FILE_URL,
+                )
+
+        # check is user input is required
+        if session.state.get("user_input_specs") and session.state[
+            "user_input_specs"
+        ].get("required", False):
+            user_input_specs = session.state["user_input_specs"]
+            agent_asking = session.state.get("agent_name", "Unknown Agent")
+            if callback:
+                callback(user_input_specs, AgentD.EventType.USER_INPUT_REQUEST)
+
+            prompt_for_user = user_input_specs.get(
+                "description", "Please provide your input."
+            )
+            print("  • User Input Required:")
+            print(
+                f"    ↳ Specs: '{agent_asking}' is asking for input: {prompt_for_user}"
+            )
+            # since state is consumed, we can remove it
+            session.state.pop("user_input_specs")

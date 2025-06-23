@@ -2,6 +2,8 @@ import os
 from datetime import timedelta
 from typing import List, Optional
 
+from google.cloud import storage
+
 from .cloud_storage_base import CloudStorage
 
 DEFAULT_EXPIRATION_MINUTES = 30
@@ -14,20 +16,11 @@ class GCPStorage(CloudStorage):
 
     def __init__(self, bucket_name: str = None):
         if not bucket_name:
-            BUCKET_NAME = os.getenv("BUCKET_NAME", None)
-            if not BUCKET_NAME:
+            bucket_name = os.getenv("BUCKET_NAME", None)
+            if not bucket_name:
                 raise ValueError("BUCKET_NAME environment variable is not set.")
-            bucket_name = BUCKET_NAME
-
-        from google.cloud import storage
 
         self.bucket_name = bucket_name
-
-        # Validate environment variable for Google Cloud credentials
-        if not os.getenv("GOOGLE_APPLICATION_CREDENTIALS"):
-            raise ValueError(
-                "Environment variable 'GOOGLE_APPLICATION_CREDENTIALS' must be set."
-            )
 
         self.client = storage.Client()
         self.bucket = self.client.bucket(bucket_name=bucket_name)
@@ -75,69 +68,3 @@ class GCPStorage(CloudStorage):
             method="GET",
         )
         return url
-
-
-if __name__ == "__main__":
-    import datetime
-
-    CLOUD_STORAGE_BUCKET_NAME = "agentd_store1"
-    gcp_storage = GCPStorage(bucket_name=CLOUD_STORAGE_BUCKET_NAME)
-
-    # TESTING
-
-    # ====== LIST FILES ======
-    # List files in the bucket
-    files = gcp_storage.list_files()
-    print("======= LIST FILES ======")
-    print(f"Files in bucket '{CLOUD_STORAGE_BUCKET_NAME}': {files}")
-    print("=========================")
-
-    # ====== UPLOAD FILE ======
-    # Upload a file to the bucket
-    local_file_path = "test_upload.txt"
-    remote_file_path = "test_upload.txt"
-    with open(local_file_path, "w") as f:
-        f.write(
-            "This is a test upload file, uploaded at " + str(datetime.datetime.now())
-        )
-    print("======= UPLOAD FILE ======")
-    gcp_storage.upload_file(local_path=local_file_path, remote_path=remote_file_path)
-    print(f"Uploaded {local_file_path} to {remote_file_path}")
-    print("=========================")
-
-    # Get a public URL for the file
-    print("======= GET FILE URL ======")
-    public_url = gcp_storage.get_file_url(remote_file_path)
-    print(f"Public URL for the file: {public_url}")
-    print("=========================")
-
-    # # Re-list files to confirm upload
-    print("======= LIST FILES ======")
-    files_after_upload = gcp_storage.list_files()
-    print(
-        f"Files in bucket '{CLOUD_STORAGE_BUCKET_NAME}' after upload: {files_after_upload}"
-    )
-    print("=========================")
-
-    # ====== DOWNLOAD FILE ======
-    # Download the file from the bucket
-    remote_download_path = remote_file_path
-    local_download_path = "test_download.txt"
-    print("======= DOWNLOAD FILE ======")
-    gcp_storage.download_file(
-        remote_path=remote_download_path, local_path=local_download_path
-    )
-    print(f"Downloaded {remote_download_path} to {local_download_path}")
-    print("=========================")
-
-    # # ====== DELETE FILE ======
-    # # Delete the file from the bucket
-    print("======= DELETE FILE ======")
-    gcp_storage.delete_file(remote_path=remote_file_path)
-    print(f"Deleted {remote_file_path}")
-    print("=========================")
-
-    # # Re-list files to confirm deletion
-    files_after_deletion = gcp_storage.list_files()
-    print("Files after deletion:", files_after_deletion)
-    print("=========================")

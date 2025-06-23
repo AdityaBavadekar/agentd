@@ -1,0 +1,11 @@
+react-app/
+typescript/
+*.md
+*.pyc
+__pycache__/
+temp.py
+generated/
+assets/
+key.json
+LICENSE.md
+README.md
