@@ -9,6 +9,13 @@ import markdown2
 from weasyprint import CSS, HTML
 
 from .cloud_storage import GCPStorage
+from .link_utils import (
+    extract_all_urls,
+    extract_and_replace_urls,
+    resolve_redirect,
+    restore_urls_from_placeholders,
+)
+from .links_injector_agent import LinkInjectorAgent
 
 dotenv.load_dotenv()
 
@@ -121,10 +128,43 @@ def _save_to_cloud(local_file_path: str, remote_file_dir: str = "pdfs") -> str:
     return public_url
 
 
+_PDF_CSS = """
+<style>
+body { font-family: sans-serif; margin: 0; padding: 0; }
+table { border-collapse: collapse; width: 100%; }
+th, td { border: 1px solid #aaa; padding: 8px; }
+th { background: #f2f2f2; }
+code { background: #f4f4f4; padding: 2px 4px; border-radius: 4px; }
+pre { background: #f4f4f4; padding: 10px; border-radius: 4px; }
+img { border-radius: 18px; }
+
+@page {
+  @bottom-center {
+    content: "Page " counter(page) " of  " counter(pages) " ";
+    font-size: 10px;
+    color: #555;
+  }
+}
+.footer {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 30px;
+  color: #555;
+  font-weight: 600;
+  font-size: 12px;
+  text-align: center;
+  padding-top: 5px;
+}
+</style>
+"""
+
+
 def create_and_upload_pdf(
     markdown_content: str,
     pdf_title: str,
-    local_dir: str = os.path.join(get_generated_directory(), "pdfs"),
+    local_dir: str = "pdfs",
     remote_dir: str = "pdfs",
 ) -> str:
     """
@@ -138,32 +178,29 @@ def create_and_upload_pdf(
     Returns:
         str: The public URL of the uploaded PDF.
     """
+    local_dir = os.path.join(get_generated_directory(), local_dir)
+    os.makedirs(local_dir, exist_ok=True)
     try:
-        pdf_bytes = io.BytesIO()
-        html_content = markdown2.markdown(markdown_content)
-        HTML(string=html_content).write_pdf(
-            pdf_bytes,
-            stylesheets=[
-                CSS(
-                    string="""
-            body { font-family: Arial, sans-serif; margin: 0.5in; }
-            h1, h2, h3 { color: #333; }
-            img { max-width: 100%; height: auto; display: block; margin: 0 auto; }
-            .section { margin-bottom: 1em; }
-        """
-                )
-            ],
+        import markdown
+
+        final_html = _PDF_CSS + markdown.markdown(
+            markdown_content,
+            extensions=["tables", "fenced_code", "codehilite"],
         )
-        pdf_bytes.seek(0)
+        html_doc = HTML(string=final_html)
 
         file_name = (
             pdf_title.replace(" ", "_").lower() + "_" + str(uuid.uuid1())[:6] + ".pdf"
         )
-        os.makedirs(local_dir, exist_ok=True)
         file_path = os.path.join(local_dir, file_name)
 
+        # [FOR TESTING] save markdown content to a file
+        with open(os.path.join(local_dir, f"{file_name[:-4]}_markdown.md"), "w") as f:
+            f.write(markdown_content)
+
         # Save locally
-        _save_to_file(file_path, pdf_bytes)
+        html_doc.write_pdf(file_path)
+        # _save_to_file(file_path, pdf_bytes)
 
         # Upload to cloud
         public_url = _save_to_cloud(file_path, remote_file_dir=remote_dir)
@@ -178,7 +215,3 @@ def create_and_upload_pdf(
 
 # create the generated directory if it doesn't exist
 os.makedirs(get_generated_directory(), exist_ok=True)
-
-if __name__ == "__main__":
-    gen_dir = get_generated_directory()
-    print(f"Generated directory: {gen_dir}")

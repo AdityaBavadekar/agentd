@@ -5,11 +5,17 @@ description = "adentd will help you find solutions and a market analysis report 
 readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [
+    "flask>=3.1.1",
+    "flask-cors>=6.0.1",
     "google-adk>=1.4.1",
     "graphviz>=0.21",
+    "gunicorn>=23.0.0",
+    "markdown>=3.8.2",
     "markdown2>=2.5.3",
     "matplotlib>=3.9.4",
     "networkx>=3.2.1",
+    "pylint>=3.3.7",
+    "streamlit>=1.46.0",
     "weasyprint>=65.1",
     "wordcloud>=1.9.4",
 ]

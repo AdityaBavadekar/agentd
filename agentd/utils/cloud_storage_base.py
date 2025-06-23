@@ -20,7 +20,6 @@ class CloudStorage(ABC):
             local_path: Local file path.
             remote_path: Destination path in cloud.
         """
-        pass
 
     @abstractmethod
     def download_file(self, remote_path: str, local_path: str) -> None:
@@ -31,7 +30,6 @@ class CloudStorage(ABC):
             remote_path: Path in cloud.
             local_path: Destination local file path.
         """
-        pass
 
     @abstractmethod
     def delete_file(self, remote_path: str) -> None:
@@ -41,7 +39,6 @@ class CloudStorage(ABC):
         Args:
             remote_path: Path in cloud.
         """
-        pass
 
     @abstractmethod
     def list_files(self, prefix: Optional[str] = None) -> List[str]:
@@ -53,7 +50,6 @@ class CloudStorage(ABC):
         Returns:
             List of file paths.
         """
-        pass
 
     @abstractmethod
     def get_file_url(self, remote_path: str) -> str:
@@ -65,4 +61,3 @@ class CloudStorage(ABC):
         Returns:
             Public URL of the file.
         """
-        pass
