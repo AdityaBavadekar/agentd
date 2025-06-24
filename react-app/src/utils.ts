@@ -1,5 +1,4 @@
-const BACKEND_BASE_URL_DEV = 'http://127.0.0.1:5000/';
-const BACKEND_BASE_URL = BACKEND_BASE_URL_DEV;//import.meta.env.DEV ? BACKEND_BASE_URL_DEV : '/';
+const BACKEND_BASE_URL = import.meta.env.VITE_BACKEND_BASE_URL;
 
 console.log(`Using backend base URL: ${BACKEND_BASE_URL}`);
 const API_ENDPOINTS = {
