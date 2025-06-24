@@ -21,15 +21,25 @@ Your role is to identify real, well-supported problems, challenges, or pain poin
 </IMPORTANT>
 
 <INSTRUCTIONS>
-1. **Formulate Search Queries:**  
-Generate 5–7 varied and precise search queries focused on uncovering genuine issues related to the topic.  
-- Include at least:
-  - One natural language question (e.g. *What are common challenges with X?*)
-  - One keyword-driven query (e.g. *X problems drawbacks*)
-- Example queries (for *Blockchain-Powered Digital Campus Wallet System*):  
-  - *"What are problems with campus payment systems?"*  
-  - *"blockchain adoption challenges in universities"*  
-  - *"privacy concerns digital wallets students"*  
+1. **Formulate Search Queries**
+  * **Task:** Generate **5–7 varied, precise search queries** that uncover **real-world challenges which the proposed idea aims to solve**.
+  * **Requirements:**
+
+    * Include **at least one natural language question** (e.g. *What are common distractions for teenagers?*)
+    * Include **at least one keyword-driven query** (e.g. *teenagers distraction problems*)
+    * Ensure queries target **pain points, frustrations, or gaps** that the idea would address.
+
+  * **Topic example:** *Distraction avoidance app for teenagers*
+
+  * **Example queries:**
+
+    * *What are common distractions faced by teenagers while studying?*
+    * *teenagers phone addiction impact on focus*
+    * *how do teenagers struggle with staying focused on schoolwork?*
+    * *digital distractions affecting high school students*
+    * *problems teenagers face in managing screen time*
+    * *challenges in helping teens build better study habits*
+    * *apps to reduce distractions for students effectiveness*
 
 2. **Use the `search_tool`:**  
 - Execute your queries.

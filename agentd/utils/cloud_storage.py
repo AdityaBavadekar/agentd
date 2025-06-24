@@ -1,8 +1,10 @@
+import json
 import os
 from datetime import timedelta
 from typing import List, Optional
 
 from google.cloud import storage
+from google.oauth2 import service_account
 
 from .cloud_storage_base import CloudStorage
 
@@ -22,7 +24,17 @@ class GCPStorage(CloudStorage):
 
         self.bucket_name = bucket_name
 
-        self.client = storage.Client()
+        # for Cloud Run
+        cred_json = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON")
+        if cred_json:
+            cred_info = json.loads(cred_json)
+            credentials = service_account.Credentials.from_service_account_info(
+                cred_info
+            )
+            self.client = storage.Client(credentials=credentials)
+        else:
+            # use default creds
+            self.client = storage.Client()
         self.bucket = self.client.bucket(bucket_name=bucket_name)
 
     def log(self, message: str) -> None:

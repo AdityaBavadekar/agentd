@@ -174,4 +174,4 @@ def generate_diagrams(visualization_data=None):
             dot, f"knowledge_graph_{gen_random_id()}"
         )
 
-    return public_urls
+    return list(public_urls.values())

@@ -50,11 +50,6 @@ Root Agent:
     
     Finalization Pipeline (Simple Agent)
 """
-import copy
-
-social_media_post_generation_agent_2 = copy.deepcopy(social_media_post_generation_agent)
-social_media_post_generation_agent_2.name = "social_media_post_generation_agent_2"
-
 
 topic_analysis_pipeline = SequentialAgent(
     name="TOPIC_ANALYSIS_PIPELINE",
@@ -132,7 +127,6 @@ def simple_after_model_modifier(callback_context: CallbackContext, *_args, **_kw
                     value = json_data
             except Exception as e:
                 print(f"Error extracting JSON from {key}: {e}")
-                continue
 
             final_markdown += "\n\n"
             if isinstance(value, dict) or isinstance(value, list):
@@ -152,6 +146,18 @@ def simple_after_model_modifier(callback_context: CallbackContext, *_args, **_kw
     callback_context.state["master_report_url"] = public_url
     print(f"Master report generated and uploaded to: {public_url}")
     print("===" * 8)
+
+    return types.Content(
+        parts=[
+            types.Part(
+                text=f"\n\n## Download Report:\nYou can download the Master report from [here]({public_url}).",
+            ),
+            types.Part(
+                text="<ASK>Please do tell if you would also like to generate social media posts for your Idea.<ASK>",
+            ),
+        ],
+        role="model",
+    )
     return None
 
 
@@ -338,11 +344,14 @@ class AgentD:
     ):
         self.log(f"RUNNING AGENTD FOR SESSION '{session.id}'")
 
+        from google.genai import errors
+
         try:
             async for event in self.runner.run_async(
                 user_id=session.user_id, session_id=session.id, new_message=new_message
             ):
                 event: Event
+                print(f"@({event.author})")
 
                 if event.content and event.content.parts:
                     if event.get_function_calls():
@@ -360,27 +369,37 @@ class AgentD:
                             print(f"    ↳ Function: {resp.name}")
                             print(f"    ↳ Result: {resp.response}")
                     elif event.content.parts[0].text:
-                        text = event.content.parts[0].text.strip()
-                        if callback:
-                            if text.startswith("<ASK>"):
-                                # this is a user input request
-                                prompt = text.replace("<ASK>", "").strip()
-                                print("  • Type: User Input Request")
-                                print(f"    ↳ Prompt: {prompt}")
-                                callback(
-                                    {"agent_name": event.author, "description": prompt},
-                                    AgentD.EventType.USER_INPUT_REQUEST,
-                                )
-                            else:
-                                texts = [t.text.strip() for t in event.content.parts]
-                                callback(texts, AgentD.EventType.TEXT_MESSAGE)
-                                # calc progress based on agent name
-                                agent_name = event.author
-                                progress = AgentD.get_progress_from_agent(agent_name)
-                                callback(
-                                    progress,
-                                    AgentD.EventType.PROGRESS_UPDATE,
-                                )
+                        texts = [t.text.strip() for t in event.content.parts]
+                        for text in texts:
+                            text = text.strip()
+                            if callback:
+                                if ("<ASK>") in text:
+                                    # this is a user input request
+                                    prompt = (
+                                        text.replace("<ASK>", "")
+                                        .replace("</ASK>", "")
+                                        .strip()
+                                    )
+                                    print("  • Type: User Input Request")
+                                    print(f"    ↳ Prompt: {prompt}")
+                                    callback(
+                                        {
+                                            "agent_name": event.author,
+                                            "description": prompt,
+                                        },
+                                        AgentD.EventType.USER_INPUT_REQUEST,
+                                    )
+                                else:
+                                    callback([text], AgentD.EventType.TEXT_MESSAGE)
+                                    # calc progress based on agent name
+                                    agent_name = event.author
+                                    progress = AgentD.get_progress_from_agent(
+                                        agent_name
+                                    )
+                                    callback(
+                                        progress,
+                                        AgentD.EventType.PROGRESS_UPDATE,
+                                    )
 
                         if event.partial:
                             print("  • Type: Streaming Text Chunk")
@@ -419,6 +438,11 @@ class AgentD:
                     if callback:
                         callback(event, AgentD.EventType.CONTROL_SIGNAL)
 
+        except errors.APIError as e:
+            import json
+
+            d = e.details
+            print(f"[ERROR] APIError: {json.dumps(d, indent=2)}")
         except Exception as e:
             print(f"An error occurred while running AgentD: {e}")
             if callback:

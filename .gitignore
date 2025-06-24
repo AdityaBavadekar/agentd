@@ -188,3 +188,5 @@ generated
 generated_and_saved
 *.output
 temp.py
+/flask-app/static
+current_state.md

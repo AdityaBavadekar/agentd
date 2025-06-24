@@ -61,8 +61,7 @@ EXAMPLE_FORMAT = """
 Summary of feasibility, potential impact, and next steps.
 """
 
-AGENT_INSTRUCTION = (
-    """
+AGENT_INSTRUCTION_0 = """
 You are the Report Generation Agent. Your primary function is to synthesize all gathered research and analysis into a comprehensive "Idea Feasibility Report." 
 - You can use the image generation tool to create visual images.
 
@@ -70,6 +69,13 @@ You are the Report Generation Agent. Your primary function is to synthesize all 
 {target_users_analysis}
 {competitor_analysis}
 <INPUT>
+"""
+
+
+AGENT_INSTRUCTION = (
+    """
+You are the Report Generation Agent. Your primary function is to synthesize all gathered research and analysis into a comprehensive "Idea Feasibility Report." 
+- You can use the image generation tool to create visual images.
 
 <INSTRUCTIONS>
 # **Workflow:**
@@ -93,7 +99,10 @@ You are the Report Generation Agent. Your primary function is to synthesize all 
 
 # 4. **Generate Diagrams TOOL (`generate_image_tool`):** Use the `generate_image_tool` to create visual diagrams (Minimum 2 diagrams required)
     * IMPORTANT: YOU YOURSELF CANNOT GENERATE DIAGRAMS, you must use the `generate_image_tool` tool to generate diagrams.
-    * This tool will return image url identifiers do not change them. Just add them to the report using markdown format: ![Diagram Description](image_url_identifier)
+    * This tool will return image url identifiers do not change them. Just add them to the report using markdown format: 
+    For eg if identifier is <generated-link-identifier-2e3f4>, you will add it to the report as:
+    ![Diagram Description](<generated-link-identifier-2e3f4>)
+    * DO not generate identifiers for the images, the tool will do that for you.
 
 # 5. Study the personas and MAKE SURE TO INCLUDE THEM IN THE REPORT (Also include the personas that you got from the Target Users Analysis Agent)
 
