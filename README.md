@@ -8,12 +8,16 @@ Built for the ["Agent Development Kit Hackathon with Google Cloud"](https://goog
 
 
 <html>
+  <body>
     <h2 align="center">
-      <img src="assets/logo.png" width="256"/>
+      <img src="assets/logo.png" width="256" />
     </h2>
     <h4 align="center">
-      An open-source, Multi-agent system that automates idea development using AI agents built using Google ADK. 
+      An open-source, Multi-agent system that automates idea development
+      using AI agents built using Google ADK. <br />
+      <a href="http://www.youtube.com/watch?v=hfshqC7B1zM">Watch demo</a>
     </h4>
+  </body>
 </html>
 
 

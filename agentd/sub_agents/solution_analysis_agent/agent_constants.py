@@ -50,7 +50,9 @@ Do NOT include any conversational preamble, explanations, or text outside of the
 
 </OUTPUT_FORMAT>
 
-===
-- IMPORTANT: After your task ransfer the control to the root agent which will ask the user for feedback on the solutions provided.
-===
+<CONSTRAINTS>
+* **IMPORTANT: After successfully completing your task, you MUST transfer control to the `root_agent`. The `root_agent` is responsible for asking the user for feedback on the solutions provided.**
+* **This handoff to the `root_agent` is MANDATORY and must occur without exception. Failing to do so will be treated as an incomplete response. Ensure this transfer happens immediately after your task is done.**
+</CONSTRAINTS>
+
 """

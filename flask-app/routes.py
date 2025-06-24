@@ -1,32 +1,28 @@
 # ============================================================
 # SOME NOTES:
-# CURENTLY, THIS IS NO AUTHENTICATION ASPECT TO THIS API.
+# CURRENTLY, THIS IS NO AUTHENTICATION ASPECT TO THIS API.
 # IT IS EXPECTED THAT USERS WILL NOT INPUT SENSITIVE DATA.
 # ============================================================
 import asyncio
 import io
 import json
+import tempfile
 import threading
 import time
 import uuid
 from dataclasses import dataclass
-from datetime import datetime
-from typing import Optional
+from datetime import datetime, timezone
+from typing import Dict, Optional
 
 from flask import Blueprint, jsonify, request, send_file
 from google.adk.events import Event
 
 from agentd import AgentD
+from agentd.utils import get_cloud_storage
 
 from .utils import error_response
 
 api = Blueprint("api", __name__)
-
-import tempfile
-from datetime import datetime, timezone
-from typing import Dict
-
-from agentd.utils import get_cloud_storage
 
 SESSIONS: Dict[str, Dict] = {}
 
@@ -70,10 +66,15 @@ async def real_pipeline_worker(request_id, topic):
     def update_session_status(**kwargs):
         kwargs.setdefault("update_timestamp", timestamp())
         append_agent_update = kwargs.pop("apppend_agent_update", None)
+        append_file = kwargs.pop("append_file", None)
         if append_agent_update:
             agent_prev_updates = SESSIONS[request_id].get("agent_updates", [])
             agent_prev_updates.append(append_agent_update)
             SESSIONS[request_id]["agent_updates"] = agent_prev_updates
+        if append_file:
+            agent_prev_files = SESSIONS[request_id].get("agent_files", [])
+            agent_prev_files.append(append_file)
+            SESSIONS[request_id]["agent_files"] = agent_prev_files
         SESSIONS[request_id].update(**kwargs)
 
     def callback(event: Event, eventType: AgentD.EventType):
@@ -129,6 +130,12 @@ async def real_pipeline_worker(request_id, topic):
                 status="New file created",
                 update=f"File `{name}` ({filetype}) created: {file_url}",
                 apppend_agent_update=f"File created:\n[Download {name}]({file_url}) : {description}",
+                append_file={
+                    "url": file_url,
+                    "name": name,
+                    "filetype": filetype,
+                    "description": description,
+                },
             )
 
         elif eventType == AgentD.EventType.PROGRESS_UPDATE:
@@ -200,22 +207,6 @@ async def real_pipeline_worker(request_id, topic):
             local_path=temp_file_path,
             remote_path=f"agentd-sessions/{request_id}_{user_id}.json",
         )
-
-
-def clear_non_running_sessions():
-    """
-    Clear sessions that are not running or waiting for input.
-    This is useful to prevent memory leaks in long-running applications.
-    """
-    global SESSIONS
-    SESSIONS = {
-        k: v
-        for k, v in SESSIONS.items()
-        if v["pipeline_status"] in ["running", "waiting_for_input"]
-    }
-
-
-threading.Timer(60, clear_non_running_sessions).start()
 
 
 def thread_worker(request_id, topic):
@@ -327,7 +318,7 @@ def get_status():
             jsonify(
                 {
                     "status": "success",
-                    "data": piplines_status,
+                    "data": {key: 0 for key in piplines_status.keys()},
                 }
             ),
             200,
@@ -387,12 +378,13 @@ def clear_old_sessions():
     CLEAN_UP_INFO["last_cleanup"] = datetime.now(timezone.utc).isoformat()
     CLEAN_UP_INFO["cleanup_count"] += 1
     # remove sessions that ended > 10 minutes ago (helps in reducing memory usage)
+    print("====> Cleaning up old sessions")
     SESSIONS = {
         k: v
         for k, v in SESSIONS.items()
         if v["pipeline_status"] in ["running", "waiting_for_input"]
         or (v["end_timestamp"] is None)
-        or (now - v["end_timestamp"] < 60 * 10)
+        or (now - datetime.fromisoformat(v["end_timestamp"]).timestamp() < 60 * 10)
     }
     # schedule next
     threading.Timer(60, clear_old_sessions).start()

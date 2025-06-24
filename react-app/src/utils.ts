@@ -1,6 +1,7 @@
-// const BACKEND_BASE_URL = 'http://127.0.0.1:8080/';
-const BACKEND_BASE_URL = 'https://agentd.adityabavadekar.tech/';
+const BACKEND_BASE_URL_DEV = 'http://127.0.0.1:5000/';
+const BACKEND_BASE_URL = BACKEND_BASE_URL_DEV;//import.meta.env.DEV ? BACKEND_BASE_URL_DEV : '/';
 
+console.log(`Using backend base URL: ${BACKEND_BASE_URL}`);
 const API_ENDPOINTS = {
     API_STATUS: 'api/status',
     API_RUN: 'api/run',

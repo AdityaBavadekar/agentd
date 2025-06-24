@@ -190,7 +190,7 @@ def create_and_upload_pdf(
         html_doc = HTML(string=final_html)
 
         file_name = (
-            pdf_title.replace(" ", "_").lower() + "_" + str(uuid.uuid1())[:6] + ".pdf"
+            pdf_title.replace(" ", "_").lower() + "_" + str(uuid.uuid1())[:8] + ".pdf"
         )
         file_path = os.path.join(local_dir, file_name)
 
