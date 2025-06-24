@@ -130,12 +130,18 @@ Before running `agentd`, ensure you have:
 
    - Create a `.env` file as per the provided `.env.sample`
 
-   - Go to https://aistudio.google.com/apikey and generate and API Key, this key will be use to generate the main Gemini AI responses. Now update the .env with the API Key.
-    - Google Cloud Storage Configuration:
+   - **Generate Gemini API Key**:  
+   Go to https://aistudio.google.com/apikey and generate and API Key, this key will be use to generate the main Gemini AI responses. Now update the .env with the API Key.
+    - **Google Cloud Storage Configuration**:
         - After creating a Bucket, create a Service Account with the ` Storage Admin` permission
         - After downloading the JSON file, update the .env with its path .env
 
-   
+    - **Configuring private key for production**:
+      - Private Key is required to generate signed urls for accessing any Google Cloud Storage file.
+      - To configure this read steps [here](https://www.reddit.com/r/googlecloud/comments/11q7cs3/how_can_i_access_a_service_account_private_key_in/) and also do apppropriate changes in `GOOGLE_APPLICATION_CREDENTIALS_JSON` of [deploy.sh](/deploy.sh)
+
+    - For deploying: change [deploy.sh](/deploy.sh) accordingly
+
 4. **Start the application**
 
    * **Web interface:**

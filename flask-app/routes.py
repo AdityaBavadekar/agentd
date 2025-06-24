@@ -6,6 +6,7 @@
 import asyncio
 import io
 import json
+import os
 import tempfile
 import threading
 import time
@@ -354,6 +355,7 @@ def api_index():
 
 @api.route("/health", methods=["GET"])
 def health_check():
+    uptime = os.popen("uptime -p").read().strip()
     return (
         jsonify(
             {
@@ -362,14 +364,20 @@ def health_check():
                 "cleanup_count": CLEAN_UP_INFO["cleanup_count"],
                 "active_sessions": len(SESSIONS),
                 "timestamp": datetime.now(timezone.utc).isoformat(),
-                "uptime": (
-                    datetime.now(timezone.utc)
-                    - datetime.fromisoformat(CLEAN_UP_INFO["last_cleanup"])
-                ).total_seconds(),
+                "uptime": uptime,
             }
         ),
         200,
     )
+
+
+@api.route("/db-check", methods=["GET"])
+def db_check():
+    try:
+        get_cloud_storage().get_file_url("index.html")
+        return jsonify({"status": "ok", "message": "Database is accessible."}), 200
+    except Exception as e:
+        return error_response(f"Database check failed: {str(e)}", 500)
 
 
 def clear_old_sessions():
@@ -378,16 +386,24 @@ def clear_old_sessions():
     CLEAN_UP_INFO["last_cleanup"] = datetime.now(timezone.utc).isoformat()
     CLEAN_UP_INFO["cleanup_count"] += 1
     # remove sessions that ended > 10 minutes ago (helps in reducing memory usage)
-    print("====> Cleaning up old sessions")
-    SESSIONS = {
-        k: v
-        for k, v in SESSIONS.items()
-        if v["pipeline_status"] in ["running", "waiting_for_input"]
-        or (v["end_timestamp"] is None)
-        or (now - datetime.fromisoformat(v["end_timestamp"]).timestamp() < 60 * 10)
-    }
+    cleared = 0
+    for request_id, session in SESSIONS.items():
+        if session["pipeline_status"] != "running":
+            session_last_update = datetime.fromisoformat(session["update_timestamp"])
+            if session["pipeline_status"] == "waiting_for_input":
+                # if waiting for more than 30 minutes, clear it
+                if (now - session_last_update.timestamp()) > 60 * 30:
+                    del SESSIONS[request_id]
+                    cleared += 1
+            else:
+                # last update more than 10 minutes ago, clear it
+                if (now - session_last_update.timestamp()) > 60 * 10:
+                    del SESSIONS[request_id]
+                    cleared += 1
+
+    print(f"====> {cleared} sessions cleared.")
     # schedule next
-    threading.Timer(60, clear_old_sessions).start()
+    threading.Timer(60 * 5, clear_old_sessions).start()
 
 
 clear_old_sessions()

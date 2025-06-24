@@ -29,6 +29,10 @@ gcloud run deploy $SERVICE_NAME \
   --platform managed \
   --region $REGION \
   --allow-unauthenticated \
-  --set-env-vars $ENV_VARS
+  --set-env-vars $ENV_VARS \
+  --update-secrets=GOOGLE_APPLICATION_CREDENTIALS_JSON=projects/1040077044123/secrets/key:latest \
+  --service-account agentd-master@$PROJECT_ID.iam.gserviceaccount.com
 
-echo "[#] Deployment complete!"
+echo "[#] Testing the deployed service..."
+
+curl -s https://agentd.adityabavadekar.tech/api/db-check | jq

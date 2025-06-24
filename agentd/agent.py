@@ -369,31 +369,37 @@ class AgentD:
                             print(f"    ↳ Function: {resp.name}")
                             print(f"    ↳ Result: {resp.response}")
                     elif event.content.parts[0].text:
-                        text = event.content.parts[0].text.strip()
-                        if callback:
-                            if ("<ASK>") in text:
-                                # this is a user input request
-                                prompt = (
-                                    text.replace("<ASK>", "")
-                                    .replace("</ASK>", "")
-                                    .strip()
-                                )
-                                print("  • Type: User Input Request")
-                                print(f"    ↳ Prompt: {prompt}")
-                                callback(
-                                    {"agent_name": event.author, "description": prompt},
-                                    AgentD.EventType.USER_INPUT_REQUEST,
-                                )
-                            else:
-                                texts = [t.text.strip() for t in event.content.parts]
-                                callback(texts, AgentD.EventType.TEXT_MESSAGE)
-                                # calc progress based on agent name
-                                agent_name = event.author
-                                progress = AgentD.get_progress_from_agent(agent_name)
-                                callback(
-                                    progress,
-                                    AgentD.EventType.PROGRESS_UPDATE,
-                                )
+                        texts = [t.text.strip() for t in event.content.parts]
+                        for text in texts:
+                            text = text.strip()
+                            if callback:
+                                if ("<ASK>") in text:
+                                    # this is a user input request
+                                    prompt = (
+                                        text.replace("<ASK>", "")
+                                        .replace("</ASK>", "")
+                                        .strip()
+                                    )
+                                    print("  • Type: User Input Request")
+                                    print(f"    ↳ Prompt: {prompt}")
+                                    callback(
+                                        {
+                                            "agent_name": event.author,
+                                            "description": prompt,
+                                        },
+                                        AgentD.EventType.USER_INPUT_REQUEST,
+                                    )
+                                else:
+                                    callback([text], AgentD.EventType.TEXT_MESSAGE)
+                                    # calc progress based on agent name
+                                    agent_name = event.author
+                                    progress = AgentD.get_progress_from_agent(
+                                        agent_name
+                                    )
+                                    callback(
+                                        progress,
+                                        AgentD.EventType.PROGRESS_UPDATE,
+                                    )
 
                         if event.partial:
                             print("  • Type: Streaming Text Chunk")
