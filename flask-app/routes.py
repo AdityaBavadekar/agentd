@@ -1,7 +1,13 @@
+# ============================================================
+# SOME NOTES:
+# CURENTLY, THIS IS NO AUTHENTICATION ASPECT TO THIS API.
+# IT IS EXPECTED THAT USERS WILL NOT INPUT SENSITIVE DATA.
+# ============================================================
 import asyncio
 import io
 import json
 import threading
+import time
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
@@ -16,21 +22,23 @@ from .utils import error_response
 
 api = Blueprint("api", __name__)
 
+import tempfile
 from datetime import datetime, timezone
 from typing import Dict
+
+from agentd.utils import get_cloud_storage
 
 SESSIONS: Dict[str, Dict] = {}
 
 AGENTD_INSTANCE = AgentD()
+CLEAN_UP_INFO = {
+    "last_cleanup": datetime.now(timezone.utc).isoformat(),
+    "cleanup_count": 0,
+}
 
 
 def timestamp():
     return datetime.utcnow().isoformat()
-    # return (
-    #     datetime.now(timezone.utc)
-    #     .isoformat(timespec="milliseconds")
-    #     .replace("+00:00", "Z")
-    # )
 
 
 def validate_run_request(data):
@@ -181,7 +189,33 @@ async def real_pipeline_worker(request_id, topic):
                 "end_timestamp": timestamp(),
             }
         )
-        return
+
+    with tempfile.NamedTemporaryFile(
+        mode="w+", delete=True, suffix=".json"
+    ) as temp_file:
+        json.dump(SESSIONS[request_id], temp_file)
+        temp_file.flush()
+        temp_file_path = temp_file.name
+        get_cloud_storage().upload_file(
+            local_path=temp_file_path,
+            remote_path=f"agentd-sessions/{request_id}_{user_id}.json",
+        )
+
+
+def clear_non_running_sessions():
+    """
+    Clear sessions that are not running or waiting for input.
+    This is useful to prevent memory leaks in long-running applications.
+    """
+    global SESSIONS
+    SESSIONS = {
+        k: v
+        for k, v in SESSIONS.items()
+        if v["pipeline_status"] in ["running", "waiting_for_input"]
+    }
+
+
+threading.Timer(60, clear_non_running_sessions).start()
 
 
 def thread_worker(request_id, topic):
@@ -311,6 +345,10 @@ def get_status():
         elif session["pipeline_status"] == "waiting_for_input":
             piplines_status["waiting_for_input_pipelines"].append(request_id)
 
+    # convert to counts (security reasons)
+    for key in piplines_status:
+        piplines_status[key] = len(piplines_status[key])
+
     response = {
         "status": "success",
         "data": piplines_status,
@@ -318,7 +356,46 @@ def get_status():
     return jsonify(response), 200
 
 
-@api.route("/health", methods=["GET"])
 @api.route("/", methods=["GET"])
-def health_check():
+def api_index():
     return jsonify({"status": "ok"}), 200
+
+
+@api.route("/health", methods=["GET"])
+def health_check():
+    return (
+        jsonify(
+            {
+                "status": "ok",
+                "last_cleanup": CLEAN_UP_INFO["last_cleanup"],
+                "cleanup_count": CLEAN_UP_INFO["cleanup_count"],
+                "active_sessions": len(SESSIONS),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "uptime": (
+                    datetime.now(timezone.utc)
+                    - datetime.fromisoformat(CLEAN_UP_INFO["last_cleanup"])
+                ).total_seconds(),
+            }
+        ),
+        200,
+    )
+
+
+def clear_old_sessions():
+    global SESSIONS
+    now = time.time()
+    CLEAN_UP_INFO["last_cleanup"] = datetime.now(timezone.utc).isoformat()
+    CLEAN_UP_INFO["cleanup_count"] += 1
+    # remove sessions that ended > 10 minutes ago (helps in reducing memory usage)
+    SESSIONS = {
+        k: v
+        for k, v in SESSIONS.items()
+        if v["pipeline_status"] in ["running", "waiting_for_input"]
+        or (v["end_timestamp"] is None)
+        or (now - v["end_timestamp"] < 60 * 10)
+    }
+    # schedule next
+    threading.Timer(60, clear_old_sessions).start()
+
+
+clear_old_sessions()

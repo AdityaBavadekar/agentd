@@ -1,5 +1,5 @@
 // const BACKEND_BASE_URL = 'http://127.0.0.1:8080/';
-const BACKEND_BASE_URL = 'https://agent-flask-app-1040077044123.asia-south1.run.app/';
+const BACKEND_BASE_URL = 'https://agentd.adityabavadekar.tech/';
 
 const API_ENDPOINTS = {
     API_STATUS: 'api/status',
